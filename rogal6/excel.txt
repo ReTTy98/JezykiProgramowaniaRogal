@@ -1,0 +1,27 @@
+=ZAOKR.GÓRA(
+    PIERWIASTEK(
+        (            SIN(
+                RADIANY(
+                    E3 - $A$5
+                )
+            ) * 0 , 05 ) ^ 2 + ( 0 , 5 *
+            COS(
+                RADIANY(
+                    E3 - $A$5
+                )
+            ) *
+            RADIANY(
+                $J$3
+            ) ) ^ 2 + (- 0 , 5 *
+            COS(
+                RADIANY(
+                    E3 - $A$5
+                )
+            ) *
+            RADIANY(
+                $B$5
+            ) ) ^ 2
+    )
+),
+{ 2
+)
