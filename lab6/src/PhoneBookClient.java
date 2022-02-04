@@ -1,3 +1,17 @@
+/*
+Plik: PhoneBookClient.java
+Program: Ksiazka telefoniczna - prosty program serwer-klient
+Autor: Paul Paczyński
+
+Program tworzy okienko klienta i automatycznie łączy sie z lokalnym hostem serwera.
+Po wpisaniu danej komendy serwer wysyla informacje, czy taka komenda istnieje,
+czy zadzialala, wyswietla blad jesli taki wystapil. 
+
+Data: Styczeń 2022
+
+
+*/
+
 package src;
 
 import java.awt.event.ActionEvent;
@@ -10,12 +24,15 @@ import java.io.ObjectOutputStream;
 import java.net.Socket;
 
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.border.EmptyBorder;
+import javax.swing.text.DefaultCaret;
 
 public class PhoneBookClient extends JFrame implements ActionListener, Runnable {
 
@@ -33,12 +50,11 @@ public class PhoneBookClient extends JFrame implements ActionListener, Runnable 
     JTextArea textArea = new JTextArea();
     JScrollPane scrollPane = new JScrollPane();
 
-
     /**
      * Launch the application.
      */
     public static void main(String[] args) {
-        new PhoneBookClient(args[0],args[1]);
+        new PhoneBookClient(args[0], args[1]);
     }
 
     /**
@@ -62,56 +78,61 @@ public class PhoneBookClient extends JFrame implements ActionListener, Runnable 
                 }
 
             }
+
             @Override
-            public void windowClosed(WindowEvent e){
+            public void windowClosed(WindowEvent e) {
                 windowClosing(e);
             }
         });
 
-        setBounds(100, 100, 405, 473);
+        setBounds(100, 100, 481, 461);
         contentPane = new JPanel();
         contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
         setContentPane(contentPane);
         contentPane.setLayout(null);
+        scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
-
-        scrollPane.setBounds(5, 11, 384, 321);
+        DefaultCaret caret = (DefaultCaret) textArea.getCaret();
+        caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
+        scrollPane.setBounds(5, 11, 461, 316);
         contentPane.add(scrollPane);
-
+        textArea.setWrapStyleWord(true);
+        textArea.setLineWrap(true);
 
         textArea.setEditable(false);
         scrollPane.setViewportView(textArea);
 
-
-        panel.setBounds(5, 338, 384, 96);
+        panel.setBounds(5, 338, 461, 79);
         contentPane.add(panel);
         panel.setLayout(null);
 
         textField = new JTextField();
-        textField.setBounds(0, 65, 374, 20);
+        textField.setBounds(10, 34, 441, 34);
         panel.add(textField);
         textField.setColumns(10);
+
+        JLabel lblNewLabel = new JLabel("/help - lista komend");
+        lblNewLabel.setBounds(10, 9, 124, 14);
+        panel.add(lblNewLabel);
         textField.addActionListener(this);
         setVisible(true);
         new Thread(this).start();
     }
 
-
-    synchronized public void printReceivedMessage(String message){
+    synchronized public void printReceivedMessage(String message) {
         textArea.append(message + "\n");
     }
 
-
     @Override
     public void run() {
-        if (serverHost.equals("")){
+        if (serverHost.equals("")) {
             serverHost = "localhost";
         }
         try {
-            socket = new Socket(serverHost,SERVER_PORT);
+            socket = new Socket(serverHost, SERVER_PORT);
             inputStream = new ObjectInputStream(socket.getInputStream());
             outputStream = new ObjectOutputStream(socket.getOutputStream());
-            
+            outputStream.writeObject(name);
 
         } catch (Exception e) {
             JOptionPane.showMessageDialog(null, "Polaczenie nie zostalo nawiazane", "ERROR", 0);
@@ -120,10 +141,10 @@ public class PhoneBookClient extends JFrame implements ActionListener, Runnable 
             return;
         }
         try {
-            while(true){
-                String message = (String)inputStream.readObject();
+            while (true) {
+                String message = (String) inputStream.readObject();
                 printReceivedMessage(message);
-                if(message.equals("/exit")){
+                if (message.equals("/exit")) {
                     inputStream.close();
                     outputStream.close();
                     socket.close();
@@ -132,27 +153,25 @@ public class PhoneBookClient extends JFrame implements ActionListener, Runnable 
                     break;
                 }
             }
-            
+
         } catch (Exception e) {
-            JOptionPane.showMessageDialog(null, "Polaczenie zostalo zerwane","ERROR",0);
+            JOptionPane.showMessageDialog(null, "Polaczenie zostalo zerwane", "ERROR", 0);
             setVisible(false);
             dispose();
         }
 
-        
     }
 
     @Override
     public void actionPerformed(ActionEvent e) {
         String command;
         Object source = e.getSource();
-        if(source == textField){
+        if (source == textField) {
             try {
                 command = textField.getText();
                 outputStream.writeObject(command);
                 textField.setText("");
-                if(command.equals("/exit")){
-                    System.out.print("CO SIE DZIEJE");
+                if (command.equals("/bye")) {
                     inputStream.close();
                     outputStream.close();
                     socket.close();
@@ -160,12 +179,11 @@ public class PhoneBookClient extends JFrame implements ActionListener, Runnable 
                     dispose();
                     return;
                 }
-                
-            } catch (IOException er) {
-                System.out.println(er);
-            }
-        } 
-        
-    }
 
+            } catch (IOException er) {
+                System.out.println(er.getMessage());
+            }
+        }
+
+    }
 }

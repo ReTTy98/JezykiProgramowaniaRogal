@@ -1,3 +1,18 @@
+/*
+Plik: Tester.java
+Program: Ksiazka telefoniczna - prosty program serwer-klient
+Autor: Paul Paczyński
+
+Jest to główna klasa aplikacji. Po jej uruchomieniu tworzy się serwer i 3 klientów.
+
+Data: Styczeń 2022
+
+
+*/
+
+
+
+
 package src;
 
 class Tester {
@@ -8,8 +23,9 @@ class Tester {
         } catch (Exception e) {
             //TODO: handle exception
         }
-        new PhoneBookClient("ewa", "localhost");
-        new PhoneBookClient("Paul", "localhost");
+        new PhoneBookClient("Hyzio", "localhost");
+        new PhoneBookClient("Zyzio", "localhost");
+        new PhoneBookClient("Dyzio", "localhost");
     }
 
     

@@ -1,3 +1,27 @@
+/*
+Plik: PhoneBookServer.java
+Program: Ksiazka telefoniczna - prosty program serwer-klient
+Autor: Paul Paczyński
+
+Program tworzy okienko serwera oraz serwer, pozwalajac na polaczenie sie klientow.
+Operujac na okienku PhoneBookServer możemy używać prawie wszystkich komend dostępnych
+dla klientów, oraz dodatkowej komendy administratora. 
+GUI wygenerowane przez plugin  WindowBuilder dla aplikacji Eclipse
+
+Komunikaty wyswietlane w tym okienku są logami wprowadzonych komend przez uzytkownika i odpowiedzia
+jaka serwer wyslal klientowi
+Np:
+Hyzio wprowadzil : /put Paul 254307
+Hyzio >>> Dodano Paul 254307
+
+komenda /save zapisuje plik w folderze w ktorym uruchomiony zostal program. 
+Tak samo komenda /load wczytuje plik tylko z folderu w ktorym uruchomiony zostal program.
+
+Data: Styczeń 2022
+
+
+*/
+
 package src;
 
 import java.awt.event.ActionEvent;
@@ -10,12 +34,15 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.border.EmptyBorder;
+import javax.swing.text.DefaultCaret;
 
 public class PhoneBookServer extends JFrame implements ActionListener, Runnable {
 
@@ -23,10 +50,22 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 	private JTextField textField;
 	static final int SERVER_PORT = 3333;
 
+	static final String COMMANDS = "/get <name>  - Pokaz numer danej osoby\n " +
+			"/delete <name> - Usun osobe o danym imieniu z kolekcji\n" +
+			"/save <file name> - Zapisz kolekcje do pliku (nie podawaj rozszerzenia)\n" +
+			"/load <file name> - Wczytaj kolekcje z pliku. UWAGA! Dodaje brakujace elementy, zastepuje istniejace elementy. (nie podawaj rozszerzenia)\n "
+			+
+			"/put <name> <number> - Dodaj osobe i jej numer do kolekcji\n" +
+			"/replace <name> <new number> - Zmien number osoby istniejacej w kolekcji\n" +
+			"/help  - Wyswietl liste komend\n" +
+			"/close - Zakoncz prace serwera. Komenda dostępna tylko z okna serera \n" +
+			"/bye - Zamknij prace klienta. Komenda dostępna tylko z okna klienta.\n";
+
 	JScrollPane scrollPane = new JScrollPane();
 	JTextArea textArea = new JTextArea();
 	JPanel panel = new JPanel();
 	PhoneBook book = new PhoneBook();
+	private final JLabel lblNewLabel = new JLabel("/help - lista komend");
 
 	public static void main(String[] args) {
 		new PhoneBookServer();
@@ -39,26 +78,34 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 		setTitle("PhoneBookServer");
 		setResizable(false);
 		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		setBounds(100, 100, 405, 473);
+		setBounds(100, 100, 434, 465);
 		contentPane = new JPanel();
 		contentPane.setBorder(new EmptyBorder(5, 5, 5, 5));
 		setContentPane(contentPane);
 		contentPane.setLayout(null);
+		scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 
-		scrollPane.setBounds(5, 11, 384, 321);
+		scrollPane.setBounds(5, 11, 403, 321);
 		contentPane.add(scrollPane);
+		textArea.setLineWrap(true);
+		DefaultCaret caret = (DefaultCaret) textArea.getCaret();
+		caret.setUpdatePolicy(DefaultCaret.ALWAYS_UPDATE);
 
 		textArea.setEditable(false);
 		scrollPane.setViewportView(textArea);
 
-		panel.setBounds(5, 338, 384, 96);
+		panel.setBounds(5, 338, 403, 96);
 		contentPane.add(panel);
 		panel.setLayout(null);
 
 		textField = new JTextField();
-		textField.setBounds(0, 65, 374, 20);
+		textField.setBounds(10, 36, 383, 38);
+		textField.addActionListener(this);
 		panel.add(textField);
 		textField.setColumns(10);
+		lblNewLabel.setBounds(10, 11, 146, 14);
+
+		panel.add(lblNewLabel);
 		setVisible(true);
 		new Thread(this).start();
 	}
@@ -68,10 +115,11 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 		boolean socket_created = false;
 		try (ServerSocket server = new ServerSocket(SERVER_PORT)) {
 			String host = InetAddress.getLocalHost().getHostName();
-			System.out.println("Uruchomiono na hoscie" + host);
+			textArea.append("Uruchomiono serwer na hoscie " + host + "\n");
 			socket_created = true;
 
 			while (true) {
+
 				Socket socket = server.accept();
 				if (socket != null) {
 					new ClientThread(this, socket);
@@ -81,7 +129,7 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 		} catch (IOException er) {
 			System.out.println(er);
 			if (!socket_created) {
-				JOptionPane.showMessageDialog(null, "Nie można utworzyć gniazda serwera", "Error", 0);
+				JOptionPane.showMessageDialog(null, "Nie można utworzyć gniazda serwera", "ERROR", 0);
 				System.exit(0);
 			} else {
 				JOptionPane.showMessageDialog(null, "ERROR: Nie mozna polaczyc sie z klientem", "ERROR", 0);
@@ -96,6 +144,12 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 		String command;
 		Object source = e.getSource();
 		if (source == textField) {
+			command = textField.getText();
+			textField.setText("");
+			if (command.trim().equals("/close")) {
+				System.exit(0);
+			}
+			readCommand(null, command);
 
 		}
 
@@ -103,38 +157,86 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 
 	synchronized public void readCommand(ClientThread client, String message) {
 		String command;
-		String out_message;
+		String outMessage;
+		message = message.trim();
+		String file_path = System.getProperty("user.dir");
 		if (message.contains(" ")) {
 			int spaces = message.replaceAll("[^ ]", "").length();
 			String arr[] = message.split(" ", 2);
 			command = arr[0];
 			String args = arr[1];
 
-			switch (command) {
-				case "/get":
-					out_message = book.get(args);
-					textArea.append(out_message);
-					client.sendMessage(out_message);
+			if (spaces == 1) {
+				switch (command) {
+					case "/get":
+						outMessage = book.get(args);
+						printMessage(client, message, outMessage);
+						break;
 
-					break;
-				case "/put":
-					String multi_args[] = args.split(" ", 2);
-					String arg1 = multi_args[0];
-					String arg2 = multi_args[1];
-					out_message = book.put(arg1,arg2);
-					textArea.append(out_message);
-					client.sendMessage(out_message);
-					break;
-				default:
-					break;
+					case "/delete":
+						outMessage = book.delete(args);
+						printMessage(client, message, outMessage);
+						break;
+
+					case "/save":
+						outMessage = book.save(file_path + "\\" + args);
+						printMessage(client, message, outMessage);
+						break;
+
+					case "/load":
+						outMessage = book.load(file_path + "\\" + args);
+						printMessage(client, message, outMessage);
+						break;
+
+					default:
+						outMessage = "Nie rozpoznano komendy\n";
+						printMessage(client, message, outMessage);
+						break;
+
+				}
+
+			} else if (spaces == 2) {
+				String multi_args[] = args.split(" ", 2);
+				String arg1 = multi_args[0];
+				String arg2 = multi_args[1];
+
+				switch (command) {
+
+					case "/put":
+						outMessage = book.put(arg1, arg2);
+						printMessage(client, message, outMessage);
+						break;
+
+					case "/replace":
+						outMessage = book.replaceNumber(arg1, arg2);
+						printMessage(client, message, outMessage);
+						break;
+
+					default:
+						outMessage = "Nie rozpoznano komendy\n";
+						printMessage(client, message, outMessage);
+						break;
+
+				}
+
 			}
 		} else {
 			command = message;
 			switch (command) {
 				case "/list":
-					out_message = book.list();
-					textArea.append(out_message);
-					client.sendMessage(out_message);
+					outMessage = book.list();
+					printMessage(client, message, outMessage);
+					break;
+				case "/help":
+					outMessage = COMMANDS;
+					printMessage(client, message, outMessage);
+					break;
+				case "/bye":
+					textArea.append(client.getName() + " zakonczyl polaczenie\n");
+					break;
+				default:
+					outMessage = "Nie rozpoznano komendy\n";
+					printMessage(client, message, outMessage);
 					break;
 
 			}
@@ -143,8 +245,18 @@ public class PhoneBookServer extends JFrame implements ActionListener, Runnable 
 
 	}
 
-	synchronized public void printCommand(ClientThread client, String message) {
-		textArea.append(message + "\n");
+	synchronized public void printMessage(ClientThread client, String inputMessage, String outputMessage) {
+		if (client != null) {
+			client.sendMessage(outputMessage);
+			textArea.append(client.getName() + " Wprowadzil:  " + inputMessage + "\n");
+			textArea.append(client.getName() + ">>> " + outputMessage + "\n");
+
+		} else {
+			textArea.append("Administrator: " + inputMessage + "\n");
+			textArea.append("@>>>" + outputMessage + "\n");
+
+		}
+
 	}
 
 }
@@ -162,11 +274,14 @@ class ClientThread implements Runnable {
 
 	}
 
-	public void sendMessage(String message){
-		try{
+	public String getName() {
+		return name;
+	}
+
+	public void sendMessage(String message) {
+		try {
 			outputStream.writeObject(message);
-		}
-		catch(IOException er){
+		} catch (IOException er) {
 			er.printStackTrace();
 		}
 	}
@@ -179,14 +294,13 @@ class ClientThread implements Runnable {
 				ObjectOutputStream output = new ObjectOutputStream(socket.getOutputStream());
 				ObjectInputStream input = new ObjectInputStream(socket.getInputStream());) {
 			outputStream = output;
+			name = (String) input.readObject();
 			while (true) {
 				message = (String) input.readObject();
 				output.writeObject(message);
-				System.out.println(message);
 				myServer.readCommand(this, message);
-				myServer.printCommand(this, message);
 
-				if (message.equals("/exit")) {
+				if (message.trim().equals("/bye")) {
 					break;
 				}
 
